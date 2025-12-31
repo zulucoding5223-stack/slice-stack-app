@@ -5,6 +5,7 @@ import {
   generateAccessToken,
   generateRefreshToken,
 } from "../utils/jwtUtils.js";
+import { sendEmail } from "../utils/nodemailer.js";
 
 export const registerUser = async (req, res) => {
   try {
@@ -34,6 +35,26 @@ export const registerUser = async (req, res) => {
       isAccountVerified: false,
       verificationOtp: null,
       verificationOtpExpireAt: null,
+    });
+
+    await sendEmail({
+      to: user.email,
+      subject: "Welcome to Slice&Stack — we are happy you are here 😊",
+      html: `
+    <h1>Welcome to <strong>Slice&Stack!</strong> 🎉</h1>
+    <p>Hi ${user.name}</p>
+    <p>Welcome to Slice&Stack! 🎉</p>
+    <p style="margin-bottom:20px">We’re happy to have you join our food community.</p>
+    <p>Your registration was successful, and your account is now active.</p>
+    <p>You can browse our menu, select your favorite meals, and place orders</p>
+    <p style="margin-bottom:20px">directly through the website.</p>
+    <p>For your convenience, you can choose to pay securely online when ordering</p>
+    <p style="margin-bottom:20px">or make payment at the restaurant when you arrive.</p>
+    <p style="margin-bottom:20px">If you have any questions or need assistance, our support team is always here to help.</p>
+    <p style="margin-bottom:20px">Thanks for joining us — we look forward to serving you!</p>
+    <p>Warm regards.</p>
+    <p>The Slice&Stack Team</p> 
+  `,
     });
 
     return res.status(201).json({
@@ -342,10 +363,28 @@ export const sendVerificationOtp = async (req, res) => {
 
     await user.save();
 
+    await sendEmail({
+      to: user.email,
+      subject: "Almost There! Verify Your Slice&Stack Account 😊",
+      html: `
+    <h1>Welcome back to <strong>Slice&Stack!</strong> 🎉</h1>
+    <p>Hi ${user.name}</p>
+    <p>We noticed you tried to log in, but your Slice&Stack account hasn't been verified yet. No worries — let's get you set up!</p>
+    <p>Use the OTP below to verify your account and access all the delicious features:</p>
+    <div style="margin:20px 0; padding:15px; background-color:#FFFAE6; border-radius:5px; text-align:center; font-size:24px; font-weight:bold;">
+    ${otp}
+    </div>
+    <p>This OTP is valid for 10 minutes. Please keep it safe and do not share it with anyone.</p>
+    <p>If you didn't try to log in, you can safely ignore this email.</p>
+    <p>See you soon!</p>
+    <p>The Slice&Stack Team</p> 
+  `,
+    });
+
     return res.status(200).json({
       success: true,
       message: "Verification otp sent to your email.",
-      userId : user._id,
+      userId: user._id,
     });
   } catch (error) {
     console.log("Error: ", error.message);
@@ -440,6 +479,23 @@ export const sendResetPasswordOtp = async (req, res) => {
     user.resetPasswordOtpExpireAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await user.save();
+
+    await sendEmail({
+      to: user.email,
+      subject: "Almost There! Reset Your Slice&Stack Password 😊",
+      html: `
+    <h1>Password Reset Request</h1>
+    <p>Hi ${user.name}</p>
+    <p>We received a request to reset your Slice&Stack account password. Use the OTP below to securely reset your password:</p>
+    <div style="margin:20px 0; padding:15px; background-color:#FFFAE6; border-radius:5px; text-align:center; font-size:24px; font-weight:bold;">
+    ${otp}
+    </div>
+    <p>This OTP is valid for 10 minutes. Please keep it safe and do not share it with anyone.</p>
+    <p>If you didn't try to log in, you can safely ignore this email.</p>
+    <p>See you soon!</p>
+    <p>The Slice&Stack Team</p> 
+  `,
+    });
 
     return res.status(200).json({
       success: true,
