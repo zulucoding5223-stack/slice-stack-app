@@ -318,7 +318,7 @@ export const createOwner = async () => {
 
 export const sendVerificationOtp = async (req, res) => {
   try {
-    const userId = req.params.id;
+    const userId = req.params;
     const user = await userModel.findById(userId);
     if (!user) {
       return res.status(401).json({
@@ -334,20 +334,18 @@ export const sendVerificationOtp = async (req, res) => {
       });
     }
 
-    const otp = Number((Math.random() * 1000000).toFixed(0));
+    const otp = Number(Math.floor(100000 + Math.random() * 900000));
 
     user.verificationOtp = otp;
 
-    user.verificationOtpExpireAt = new Date(
-      new Date().getTime(Date.now() + 10 * 60 * 1000)
-    );
+    user.verificationOtpExpireAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await user.save();
 
     return res.status(200).json({
       success: true,
       message: "Verification otp sent to your email.",
-      verificationLink: `/verify-account/${userId}`,
+      userId : user._id,
     });
   } catch (error) {
     console.log("Error: ", error.message);
@@ -368,7 +366,7 @@ export const verifyAccount = async (req, res) => {
       });
     }
 
-    const userId = req.params.id;
+    const userId = req.params;
     const user = await userModel.findById(userId);
     if (!user) {
       return res.status(401).json({
@@ -435,20 +433,18 @@ export const sendResetPasswordOtp = async (req, res) => {
       });
     }
 
-    const otp = Number((Math.random() * 1000000).toFixed(0));
+    const otp = Number(Math.floor(100000 + Math.random() * 900000));
 
     user.resetPasswordOtp = otp;
 
-    user.resetPasswordOtpExpireAt = new Date(
-      new Date().getTime(Date.now() + 10 * 60 * 1000)
-    );
+    user.resetPasswordOtpExpireAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await user.save();
 
     return res.status(200).json({
       success: true,
       message: "OTP sent to your email address.",
-      otp,
+      userId: user._id,
     });
   } catch (error) {
     console.log("Error: ", error.message);
@@ -456,6 +452,113 @@ export const sendResetPasswordOtp = async (req, res) => {
       success: false,
       message:
         "Internal server error. Cannot generate reset OTP. Try again later.",
+    });
+  }
+};
+
+export const validateResetPasswordOtp = async (req, res) => {
+  try {
+    const { otp } = req.body;
+    const { userId } = req.params.id;
+
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(403).json({
+        success: false,
+        message: "No user found.",
+      });
+    }
+
+    if (!otp) {
+      return res.status(401).json({
+        successs: false,
+        message: "Please provide OTP.",
+      });
+    }
+
+    const currentTime = new Date();
+
+    if (!user.resetPasswordOtp || currentTime > user.resetPasswordOtpExpireAt) {
+      user.resetPasswordOtp = null;
+      user.resetPasswordOtpExpireAt = null;
+      await user.save();
+      return res.status(403).json({
+        success: false,
+        message: "Invalid OTP.",
+      });
+    }
+
+    if (user.resetPasswordOtp !== Number(otp)) {
+      return res.status(400).json({
+        success: false,
+        message: "Incorrect OTP.",
+      });
+    }
+
+    user.isResetPasswordOtpValid = true;
+    user.resetPasswordOtp = null;
+    user.resetPasswordOtpExpireAt = null;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP verified successfully!",
+      userId: user._id,
+    });
+  } catch (error) {
+    console.log("Error: ", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error. Cannot valiate OTP. Try again later.",
+    });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { password, confirmPassword } = req.body;
+    if (!password || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Please fill in all fields. (password and confirm password).",
+      });
+    }
+
+    const { userId } = req.params;
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "No user found.",
+      });
+    }
+
+    if (user.isResetPasswordOtpValid === false) {
+      return res.status(403).json({
+        success: false,
+        message: "Your Otp is invalid. cannot reset password.",
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(404).json({
+        success: false,
+        message: "Password and Confirm password are not the same.",
+      });
+    }
+
+    user.password = await bcrypt.hash(password, 10);
+    await user.save();
+
+    return res.status(201).json({
+      success: true,
+      message: "Password has successfully been reset.",
+    });
+  } catch (error) {
+    console.log("Error: ", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error. Cannot reset Password. Try again later.",
     });
   }
 };
