@@ -416,3 +416,46 @@ export const verifyAccount = async (req, res) => {
     });
   }
 };
+
+export const sendResetPasswordOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Please enter your email.",
+      });
+    }
+
+    const user = await userModel.findOne({ email });
+    if (!user) {
+      return res.status(403).json({
+        success: false,
+        message: "User not found. Please register.",
+      });
+    }
+
+    const otp = Number((Math.random() * 1000000).toFixed(0));
+
+    user.resetPasswordOtp = otp;
+
+    user.resetPasswordOtpExpireAt = new Date(
+      new Date().getTime(Date.now() + 10 * 60 * 1000)
+    );
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent to your email address.",
+      otp,
+    });
+  } catch (error) {
+    console.log("Error: ", error.message);
+    return res.status(500).json({
+      success: false,
+      message:
+        "Internal server error. Cannot generate reset OTP. Try again later.",
+    });
+  }
+};
