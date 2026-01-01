@@ -6,6 +6,7 @@ import {
   generateRefreshToken,
 } from "../utils/jwtUtils.js";
 import { sendEmail } from "../utils/nodemailer.js";
+import cloudinary from "../utils/cloudinary.js";
 
 export const registerUser = async (req, res) => {
   try {
@@ -27,22 +28,22 @@ export const registerUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await userModel.create({
+    const newUser = await userModel.create({
       name,
       email,
       password: hashedPassword,
-      role,
+      role: "user",
       isAccountVerified: false,
       verificationOtp: null,
       verificationOtpExpireAt: null,
     });
 
     await sendEmail({
-      to: user.email,
+      to: newUser.email,
       subject: "Welcome to Slice&Stack — we are happy you are here 😊",
       html: `
     <h1>Welcome to <strong>Slice&Stack!</strong> 🎉</h1>
-    <p>Hi ${user.name}</p>
+    <p>Hi ${newUser.name}</p>
     <p>Welcome to Slice&Stack! 🎉</p>
     <p style="margin-bottom:20px">We’re happy to have you join our food community.</p>
     <p>Your registration was successful, and your account is now active.</p>
@@ -102,7 +103,7 @@ export const loginUser = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "In order to continue please verify your account.",
-        verificationOtpLink: `/send-otp/${userId}`,
+        verificationOtpLink: `http://localhost:4000/users/send-verification-otp/${userId}`,
       });
     }
 
@@ -149,6 +150,13 @@ export const dashboard = async (req, res) => {
         success: false,
         message: "No user found. Please login.",
       });
+    }
+
+    if(user.role !== 'user'){
+      return res.status(403).json({
+        success: false,
+        message: "Only users are allowed access."
+      })
     }
 
     return res.status(200).json({
@@ -264,7 +272,7 @@ export const createAdmin = async (req, res) => {
     }
 
     const ownerId = req.user.id;
-    const owner = await userModel.findOne(ownerId);
+    const owner = await userModel.findById(ownerId);
     if (!owner) {
       return res.status(401).json({
         success: false,
@@ -279,17 +287,17 @@ export const createAdmin = async (req, res) => {
       });
     }
 
-    const existingUser = await userModel.findOne({ email });
-    if (existingUser) {
+    const existingAdmin = await userModel.findOne({email});
+    if (existingAdmin) {
       return res.status(400).json({
         success: false,
-        message: "User found. Cannot register an existing user.",
+        message: "Admin found. Cannot register an existing admin.",
       });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await userModel.create({
+    const newAdmin = await userModel.create({
       name,
       email,
       password: hashedPassword,
@@ -299,6 +307,7 @@ export const createAdmin = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Admin registration successful.",
+      newAdmin
     });
   } catch (error) {
     console.log("Error: ", error.message);
@@ -339,7 +348,7 @@ export const createOwner = async () => {
 
 export const sendVerificationOtp = async (req, res) => {
   try {
-    const userId = req.params;
+    const userId = req.params.id;
     const user = await userModel.findById(userId);
     if (!user) {
       return res.status(401).json({
@@ -405,7 +414,7 @@ export const verifyAccount = async (req, res) => {
       });
     }
 
-    const userId = req.params;
+    const userId = req.params.id;
     const user = await userModel.findById(userId);
     if (!user) {
       return res.status(401).json({
@@ -515,7 +524,7 @@ export const sendResetPasswordOtp = async (req, res) => {
 export const validateResetPasswordOtp = async (req, res) => {
   try {
     const { otp } = req.body;
-    const { userId } = req.params.id;
+    const userId  = req.params.id;
 
     const user = await userModel.findById(userId);
     if (!user) {
@@ -580,7 +589,7 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    const { userId } = req.params;
+    const userId = req.params.id;
     const user = await userModel.findById(userId);
     if (!user) {
       return res.status(404).json({
@@ -615,6 +624,89 @@ export const resetPassword = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error. Cannot reset Password. Try again later.",
+    });
+  }
+};
+
+export const uploadProfilePicture = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(403).json({
+        success: false,
+        message: "No user found. Please login.",
+      });
+    }
+    const oldPublicId = user.profilePicture?.public_id;
+
+    const result = await cloudinary.uploader.upload(
+      `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`,
+      { folder: "profile_photos" }
+    );
+
+    user.profilePicture = {
+      url: result.secure_url,
+      public_id: result.public_id,
+    };
+
+    await user.save();
+
+    if (oldPublicId) {
+      await cloudinary.uploader.destroy(oldPublicId);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Profile updated successfully.",
+      user,
+    });
+  } catch (error) {
+    console.log("Error: ", error.message);
+    return res.status(500).json({
+      success: false,
+      message:
+        "Internal server error. Cannot set profile picture. Try again later.",
+    });
+  }
+};
+
+export const fetchAdmins = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "No user found. Please login.",
+      });
+    }
+
+    if (user.role !== "owner") {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized access. Only owner is allowed.",
+      });
+    }
+
+    const admins = await userModel.find({ role: "admin" });
+    if (!admins) {
+      return res.status(404).json({
+        success: false,
+        message: "No admins found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      admins,
+      user,
+    });
+  } catch (error) {
+    console.log("Error: ", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error when fetching admins.",
     });
   }
 };
