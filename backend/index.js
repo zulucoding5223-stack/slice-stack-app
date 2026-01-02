@@ -1,9 +1,10 @@
-import express from "express";
+import express, { urlencoded } from "express";
 import "dotenv/config";
 import { connectDB } from "./config/db.js";
 import { createOwner } from "./controllers/userController.js";
 import userRouter from "./routes/userRoutes.js";
 import cookieParser from "cookie-parser";
+import pizzaRoutes from "./routes/pizzaRoutes.js";
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.get("/", (rep, res) => {
 app.use(cookieParser())
 app.use(express.json());
 app.use('/users', userRouter)
+app.use('/products', pizzaRoutes)
 
 const startServer = async () => {
   try {

@@ -12,7 +12,7 @@ export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
-      return res.status(401).json({
+      return res.status(400).json({
         success: false,
         message: "Please fill in all empty fields (name, email, pasword).",
       });
@@ -637,7 +637,7 @@ export const uploadProfilePicture = async (req, res) => {
         success: false,
         message: "No user found. Please login.",
       });
-    }
+    } 
     const oldPublicId = user.profilePicture?.public_id;
 
     const result = await cloudinary.uploader.upload(
@@ -710,3 +710,5 @@ export const fetchAdmins = async (req, res) => {
     });
   }
 };
+
+
