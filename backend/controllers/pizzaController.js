@@ -296,13 +296,71 @@ export const updatePizza = async (req, res) => {
       success: true,
       message: "Pizza updated successfully",
       pizza,
-      updatedAt: (pizza.updatedAt).toLocaleTimeString()
+      updatedAt: pizza.updatedAt.toLocaleTimeString(),
     });
   } catch (error) {
     console.log(error);
     res.status(500).json({
       success: false,
       message: "Failed to update pizza",
+      error: error.message,
+    });
+  }
+};
+
+export const deletePizza = async (req, res) => {
+  try {
+    const pizzaId = req.params.id;
+    const pizza = await pizzaModel.findById(pizzaId);
+
+    if (!pizza) {
+      return res.status(404).json({
+        success: false,
+        message: "Pizza not found",
+      });
+    }
+
+    if (!req.user || (req.user.role !== "admin" && req.user.role !== "owner")) {
+      return res.status(403).json({
+        success: false,
+        message: "Only admins or owners can delete pizza",
+      });
+    }
+
+    for (let img of pizza.images) {
+      await cloudinary.uploader.destroy(img.public_id);
+    }
+
+    await pizza.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: "Pizza deleted successfully",
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete pizza",
+      error: error.message,
+    });
+  }
+};
+
+export const getAllPizzas = async (req, res) => {
+  try {
+    const pizzas = await pizzaModel.find({});
+
+    return res.status(200).json({
+      success: true,
+      count: pizzas.length,
+      pizzas,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch pizzas",
       error: error.message,
     });
   }
